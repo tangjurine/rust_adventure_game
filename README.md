@@ -2,6 +2,6 @@
 
 ```bash
 $ git clone https://github.com/tangjurine/rust_adventure_game.git
-$ cd rust_game
+$ cd rust_adventure_game
 $ cargo run
 ```
