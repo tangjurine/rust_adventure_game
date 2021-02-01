@@ -43,64 +43,89 @@ fn go(
 ) -> ((i32, i32), Vec<String>) {
     // try to move in a direction
     let mut out_strs: Vec<String> = Vec::new();
-    if rooms.get(&position).is_none() {
-        out_strs.push(format!("You are in the void. You are trapped, forever."));
-        return (*position, out_strs)
+    match rooms.get(&position) {
+        None => {
+            out_strs.push("You are in the void. You are trapped, forever.".to_string());
+            return (*position, out_strs)
+        },
+        Some(room) => match room.exits.get(&dir) {
+            None => {
+                out_strs.push(format!("You cannot go {}. There is no exit!", dir.describe()));
+                return (*position, out_strs)
+            },
+            Some(Blocked) => {
+                out_strs.push(format!("You cannot go {}. The exit is blocked!", dir.describe()));
+                return (*position, out_strs);
+            },
+            _ => ()
+        }
     }
-    if !rooms.get(&position).unwrap().exits.contains_key(&dir) {
-        out_strs.push(format!("You cannot go {}. There is no exit!", dir.describe()));
-        return (*position, out_strs)
-    }
-    if *rooms.get(&position).unwrap().exits.get(&dir).unwrap() == Blocked {
-        out_strs.push(format!("You cannot go {}. The exit is blocked!", dir.describe()));
-        return (*position, out_strs);
-    }
-    let next = dir.go(*position);
-    if let Some(next_room) = rooms.get(&next) {
-        if next_room.exits.get(&dir.reverse()).unwrap() == &Blocked {
-            out_strs.push(format!("You cannot go {}. The entrance to the new room is blocked!", 
+    let next_position = dir.go(*position);
+    if let Some(next_room) = rooms.get(&next_position) {
+        match next_room.exits.get(&dir.reverse()) {
+            None => {
+                out_strs.push(format!("You cannot go {}. There is no entrance to the new room.", 
                     dir.describe()));
-            return (*position, out_strs);
-        } else {
-            out_strs.push(format!("Moving {}.", dir.describe()));
-            return (next, out_strs);
+                return (*position, out_strs);
+            },
+            Some(Blocked) => {
+                out_strs.push(format!("You cannot go {}. The entrance to the new room is blocked!", 
+                    dir.describe()));
+                return (*position, out_strs);
+            },
+            Some(Cleared) => {
+                out_strs.push(format!("Moving {}.", dir.describe()));
+                return (next_position, out_strs);
+            }
         }
     }
     out_strs.push(format!("You cannot go {}. There is no room connected to the exit!", 
                 dir.describe()));
-    return (*position, out_strs)
+    (*position, out_strs)
 }
 
 fn clear(
-    position: &mut (i32, i32), 
+    position: &(i32, i32), 
     rooms: &mut HashMap<(i32, i32), Room>, 
     dir: Direction
 ) -> ((i32, i32), Vec<String>) { 
     // try to clear an entrance in a direction
     let mut out_strs: Vec<String> = Vec::new();
-    if rooms.get(&position).is_none() {
-        out_strs.push(format!("You are in the void. There is nothing to clear."));
-        return (*position, out_strs)
+    match rooms.get(&position) {
+        None => {
+            out_strs.push("You are in the void. There is nothing to clear.".to_string());
+            return (*position, out_strs)
+        },
+        Some(Room {exits, .. }) => match exits.get(&dir) {
+            None => {
+                out_strs.push(format!("You cannot clear the {} exit. There is no exit!", dir.describe()));
+                return (*position, out_strs)
+            },
+            Some(Blocked) => {
+                out_strs.push(format!("You clear the {}ern exit.", dir.describe()));
+                rooms.get_mut(&position).unwrap().exits.insert(dir, Cleared);
+                return (*position, out_strs);
+            },
+            _ => ()
+        }
     }
-    if !rooms.get(&position).unwrap().exits.contains_key(&dir) {
-        out_strs.push(format!("You cannot clear the {} exit. There is no exit!", dir.describe()));
-        return (*position, out_strs)
-    }
-    if *rooms.get(&position).unwrap().exits.get(&dir).unwrap() == Blocked {
-        out_strs.push(format!("You clear the {}ern exit.", dir.describe()));
-        rooms.get_mut(&position).unwrap().exits.insert(dir, Cleared);
-        return (*position, out_strs);
-    }
-    let next = dir.go(*position);
-    if let Some(next_room) = rooms.get(&next) {
-        if next_room.exits.get(&dir.reverse()).unwrap() == &Blocked {
-            out_strs.push(format!("You try to clear the entrance to the {}ern room from this side, but you cannot.", 
+    let next_position = dir.go(*position);
+    if let Some(next_room) = rooms.get(&next_position) {
+        match next_room.exits.get(&dir.reverse()) {
+            Some(Blocked) => {
+                out_strs.push(format!("You try to clear the entrance to the {}ern room from this side, but you cannot.", 
                     dir.describe()));
-            return (*position, out_strs);
+                return (*position, out_strs);
+            },
+            None => {
+                out_strs.push(format!("The {}ern exit is already clear, but there is no entrance to the new room.", dir.describe()));
+                return (*position, out_strs);
+            },
+            _ => ()
         }
     }
     out_strs.push(format!("The {}ern exit is already clear.", dir.describe()));
-    return (*position, out_strs);
+    (*position, out_strs)
 }
 
 fn take(
@@ -109,19 +134,21 @@ fn take(
 ) -> ((i32, i32), Vec<String>) { 
     // try to take the treasure
     let mut out_strs: Vec<String> = Vec::new();
-    if rooms.get(&position).is_none() {
-        out_strs.push(format!("You are in the void. You are trapped, forever."));
-        return (*position, out_strs)
-    } else if rooms.get(&position).unwrap().status == TreasureFilled {
-        out_strs.push(format!("You take the treasure."));
-        let room = rooms.get_mut(&position).unwrap();
-        room.infested = std::cmp::max(1, room.infested);
-        room.status = Empty;
-        return (*position, out_strs)
-    } else {
-        out_strs.push(format!("There is nothing to take."));
-        return (*position, out_strs)
+    match rooms.get(&position) {
+        None => {
+            out_strs.push("You are in the void. You are trapped, forever.".to_string());
+        },
+        Some(Room {status: TreasureFilled, ..}) => {
+            out_strs.push("You take the treasure.".to_string());
+            let room = rooms.get_mut(&position).unwrap();
+            room.infested = std::cmp::max(1, room.infested);
+            room.status = Empty;
+        },
+        _ => {
+            out_strs.push("There is nothing to take.".to_string());
+        }
     }
+    (*position, out_strs)
 }
 
 fn leave(
@@ -131,8 +158,7 @@ fn leave(
 ) -> ((i32, i32), Vec<String>) { 
     // try to leave the ruins
     let mut out_strs: Vec<String> = Vec::new();
-    let at_entrance = rooms.contains_key(&position) &&
-        rooms.get(&position).unwrap().status == Entrance;
+    let at_entrance = rooms.get(&position).map_or(false, |room| room.status == Entrance);
     let taken_treasure = rooms.values().all(|room| room.status != TreasureFilled);
     if at_entrance && taken_treasure {
         *finished_game = true;
@@ -158,7 +184,7 @@ fn update_rooms(rooms: &mut HashMap<(i32, i32), Room>) {
     let positions_to_infest: Vec<_> = rooms
         .iter()
         .filter(|&(pos, room)| room.is_infested() || has_infested_neighbor(pos, rooms))
-        .map(|(k, _)| k.clone())
+        .map(|(k, _)| *k)
         .collect();
     for pos in positions_to_infest {
         rooms.get_mut(&pos).unwrap().infest()
@@ -171,7 +197,6 @@ fn get_command() -> Command {
         let mut input = String::new();
         io::stdin()
             .read_line(&mut input)
-            .ok()
             .expect("Failed to read line");
         command = match input.trim() {
             "n" => Some(Go(North)),
@@ -279,9 +304,9 @@ fn main() {
         update_rooms(&mut rooms);
         update_rooms(&mut rooms);
         let (new_position, outputs) = match get_command() {
-            Go(dir) => go(&mut current_position, &mut rooms, &dir),
-            Clear(dir) => clear(&mut current_position, &mut rooms, dir),
-            Take => take(&mut current_position, &mut rooms),
+            Go(dir) => go(&current_position, &rooms, &dir),
+            Clear(dir) => clear(&current_position, &mut rooms, dir),
+            Take => take(&current_position, &mut rooms),
             Leave => leave(&current_position, &rooms, &mut finished_game)
         };
         for s in outputs {

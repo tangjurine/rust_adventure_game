@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::cmp::Ordering;
 
 use crate::direction::Direction;
 use ExitStatus::*;
@@ -45,10 +46,10 @@ pub struct Room {
 
 impl Room {
     pub fn describe(&self) -> String {
-        let mut out = format!("You find yourself in {}{}. ", 
+        let out = format!("You find yourself in {}{}. {}", 
                 self.status.describe(),
-                self.describe_infestation()).to_owned();
-        out.push_str(&self.describe_exits());
+                self.describe_infestation(),
+                self.describe_exits());
         out
     }
 
@@ -60,14 +61,17 @@ impl Room {
                 let mut iter = self.exits.iter();
                 for i in 0..self.exits.len() {
                     let (direction, status) = iter.next().unwrap();
-                    let formatted_str = 
-                        if i + 2 < self.exits.len(){
+                    let formatted_str = match (i + 2).cmp(&self.exits.len()) {
+                        Ordering::Less => {
                             format!("one{} exit to the {}, ", status.describe(), direction.describe())
-                        } else if i + 2 == self.exits.len() {
+                        },
+                        Ordering::Equal => {
                             format!("one{} exit to the {} and ", status.describe(), direction.describe())
-                        } else {
+                        },
+                        Ordering::Greater => {
                             format!("one{} exit to the {}.", status.describe(), direction.describe())
-                        };
+                        }
+                    };
                     temp.push_str(&formatted_str);
                 }
                 temp
